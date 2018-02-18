@@ -86,11 +86,11 @@ class TurtleBotLab4
 
 TurtleBotLab4::TurtleBotLab4(){
     boost::thread t_odom( &TurtleBotLab4::odom_thread, this);
-    // boost::thread t_velPub( &TurtleBotLab4::velPub_thread, this);
+    boost::thread t_velPub( &TurtleBotLab4::velPub_thread, this);
     // boost::thread t_bumper( &TurtleBotLab4::bumper_thread, this);
     t_odom.join();
     // t_bumper.join();
-    // t_velPub.join();
+    t_velPub.join();
 }
 
 void TurtleBotLab4::odom_thread(){
@@ -119,10 +119,10 @@ void TurtleBotLab4::odom_callback(const nav_msgs::Odometry::ConstPtr& msg){
                      msg->pose.pose.orientation.w);
     tf::Matrix3x3 m(q);
     m.getRPY(roll, pitch, yaw);
-    ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]",
-             msg->pose.pose.position.x,
-             msg->pose.pose.position.y,
-             msg->pose.pose.position.z);
+    // ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]",
+    //          msg->pose.pose.position.x,
+    //          msg->pose.pose.position.y,
+    //          msg->pose.pose.position.z);
     // ROS_INFO("Orientation-> x: [%f], y: [%f], z: [%f], w: [%f]",
     //          msg->pose.pose.orientation.x,
     //          msg->pose.pose.orientation.y,
