@@ -115,6 +115,7 @@ struct M_Line{
     double disFrom(geometry_msgs::Point p){
         double angle = atan2(p.y - point.y, p.x - point.x) - orentation;
         double retDis = distanceBetween(p, point) * fabs(sin(angle));
+        return retDis;
     }
 };
 
@@ -482,6 +483,7 @@ void TurtleBotLab5::robotStatusCheck_wall_follow(){
     {
         robotStatus = RobotStatus::LostWall;
     }
+    ROS_INFO_STREAM("mline dis:" << mLine.disFrom(curPosition));
 }
 
 bool TurtleBotLab5::cornerDetected(){
