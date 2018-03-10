@@ -18,7 +18,6 @@
 #include <Eigen/Dense>
 #include <iostream>
 
-#include <math.h>
 #include <cmath>
 #include <vector>
 
@@ -387,7 +386,7 @@ void TurtleBotLab5::wall_follow(){
         robotStatusCheck_wall_follow();
         while(robotStatus == RobotStatus::LostWall){
             ROS_INFO("Lost Wall, finding...  ");
-            rotate(degree2rad(10));
+            rotate(degree2rad(-10));
             robotStatusCheck_wall_follow();
         }
     }
@@ -409,7 +408,7 @@ double TurtleBotLab5::calcWallAngleInRobotCoord(){
         p2_index = obstacleIndex - SCAN_INTERVAL;
     }
     if(obstacleIndex == -1 ||
-       isnan(curRanges[p1_index]) || isnan(curRanges[p2_index]))
+       std::isnan(curRanges[p1_index]) || std::isnan(curRanges[p2_index]))
         return 0;
     p1.x = curRanges[p1_index] * cos(angle_min + p1_index *angle_increment);
     p1.y = curRanges[p1_index] * sin(angle_min + p1_index *angle_increment);
@@ -473,6 +472,7 @@ void TurtleBotLab5::robotStatusCheck_wall_follow(){
         ROS_INFO("cur: [%f], [%f]", curPosition.x, curPosition.y);
         ROS_INFO("mLine dis: [%f]", mLine.disFrom(curPosition));
         robotStatus = RobotStatus::AtMLine;
+        return;
     }
     else if(distanceBetween(curPosition, goalPoint) <= POINT_DISTANT_THRESHOLD){
         robotStatus = RobotStatus::AtGoal;
@@ -483,13 +483,12 @@ void TurtleBotLab5::robotStatusCheck_wall_follow(){
     {
         robotStatus = RobotStatus::LostWall;
     }
-    ROS_INFO_STREAM("mline dis:" << mLine.disFrom(curPosition));
 }
 
 bool TurtleBotLab5::cornerDetected(){
     double pcount = 0.0;
     for (const auto &p : curRanges){
-        if(!isnan(p)) pcount+= 1.0;
+        if(!std::isnan(p) && p < CLEARANCE_DISTANCE + 0.3) pcount+= 1.0;
     }
     if(pcount < range_size * 0.6) return true;
     return false;
@@ -500,7 +499,7 @@ bool TurtleBotLab5::doubleLaserDetected(){
     int obstacleIndex2 = rightContact ?
             obstacleIndex - SCAN_INTERVAL:
             obstacleIndex + SCAN_INTERVAL;
-    return !isnan(curRanges[obstacleIndex2]);
+    return !std::isnan(curRanges[obstacleIndex2]);
 }
 
 void TurtleBotLab5::adjustToMLine(){
