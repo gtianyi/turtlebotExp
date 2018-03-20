@@ -118,7 +118,9 @@ struct M_Line{
     }
 };
 
-enum RobotStatus{AtGoal, AtMLine, AtHitPoint, LostWall, Collision, Overshoot, OK};
+enum class RobotStatus{AtGoal,
+        AtMLine, AtHitPoint, LostWall,
+        Collision, Overshoot, OK};
 
 class TurtleBotLab5
 {
@@ -408,7 +410,8 @@ double TurtleBotLab5::calcWallAngleInRobotCoord(){
         p2_index = obstacleIndex - SCAN_INTERVAL;
     }
     if(obstacleIndex == -1 ||
-       std::isnan(curRanges[p1_index]) || std::isnan(curRanges[p2_index]))
+       std::isnan(curRanges[p1_index]) || std::isnan(curRanges[p2_index]) ||
+       p1_index < 0 || p2_index < 0)
         return 0;
     p1.x = curRanges[p1_index] * cos(angle_min + p1_index *angle_increment);
     p1.y = curRanges[p1_index] * sin(angle_min + p1_index *angle_increment);
@@ -464,13 +467,13 @@ void TurtleBotLab5::rotate(double angle){
 
 void TurtleBotLab5::robotStatusCheck_wall_follow(){
     if(collide) return;
+    ROS_INFO("mLine dis: [%f]", mLine.disFrom(curPosition));
     if(distanceBetween(curPosition, hitPoint) <= POINT_DISTANT_THRESHOLD)
     {
         robotStatus = RobotStatus::AtHitPoint;
     }
     else if(mLine.disFrom(curPosition) <= MLine_DEVIANCE){
-        ROS_INFO("cur: [%f], [%f]", curPosition.x, curPosition.y);
-        ROS_INFO("mLine dis: [%f]", mLine.disFrom(curPosition));
+        ROS_INFO("Back to MLine");
         robotStatus = RobotStatus::AtMLine;
         return;
     }
