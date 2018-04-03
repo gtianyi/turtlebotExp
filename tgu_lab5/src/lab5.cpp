@@ -44,7 +44,7 @@
 // parameter for bug2
 #define GOAL_DISTANCE 3.5
 #define INITIAL_DISTANCE 0.5
-#define CLEARANCE_DISTANCE 0.6 // 0.45 limit for gazebo
+#define CLEARANCE_DISTANCE 0.7 // 0.45 limit for gazebo
 #define LAEERSCAN_MIN_RANG 0.46 // 0.45 limit for gazebo
 
 #define SCAN_INTERVAL 10
@@ -286,6 +286,8 @@ void TurtleBotLab5::move(){
         case RobotStatus::Collision:
             ROS_INFO("Robot Collide Obstacal !");
             break;
+		default:
+			break;
     }
 }
 
@@ -354,7 +356,6 @@ void TurtleBotLab5::wall_follow(){
     if(robotStatus != RobotStatus::AtMLine) return;
     ROS_INFO("Wall following...  ");
     robotStatus = RobotStatus::OK;
-    double prevWallAngleInRobotCoord;
     while( robotStatus == RobotStatus::OK){
         double wallAngleInRobotCoord = calcWallAngleInRobotCoord();
         // always trun right

@@ -87,9 +87,9 @@ class TurtleBotLab4
 TurtleBotLab4::TurtleBotLab4(){
     boost::thread t_odom( &TurtleBotLab4::odom_thread, this);
     boost::thread t_velPub( &TurtleBotLab4::velPub_thread, this);
-    // boost::thread t_bumper( &TurtleBotLab4::bumper_thread, this);
+    boost::thread t_bumper( &TurtleBotLab4::bumper_thread, this);
     t_odom.join();
-    // t_bumper.join();
+    t_bumper.join();
     t_velPub.join();
 }
 
@@ -149,15 +149,15 @@ void TurtleBotLab4::bumper_callback(const kobuki_msgs::BumperEventConstPtr msg){
 void TurtleBotLab4::velPub_thread(){
     vel_pub =  nodeHandle_pub.advertise<geometry_msgs::Twist>(
         "cmd_vel_mux/input/teleop", 1, true);
-    // ros::Rate loop_rate(10);
-    // while(ros::ok()){
-    //     if (trig){
-    //         executeTrajectory();
-    //         trig = false;
-    //     }
-    //     loop_rate.sleep();
-    // }
-    executeTrajectory();
+    ros::Rate loop_rate(10);
+    while(ros::ok()){
+        if (trig){
+            executeTrajectory();
+            trig = false;
+        }
+        loop_rate.sleep();
+    }
+    // executeTrajectory();
 }
 
 void TurtleBotLab4::executeTrajectory(){
