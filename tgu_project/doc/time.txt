@@ -1,0 +1,16 @@
+Project Plan team3 Tianyi Gu, Zhuo Xu
+
+April 4 - project planning meeting
+
+April 9 - done with building and updating the occupancy map
+
+April 16 - done with implement frontier based exploration
+
+April 23 - done with gazebo test
+
+April 30 - done with robot test
+
+May 2 - final demo
+
+May 7 - final report
+
