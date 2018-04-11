@@ -56,4 +56,6 @@ std::vector<std::pair<int, int>> getLine(const int x1i,
             error += dx;
         }
     }
+
+	return ret;
 };
