@@ -1,3 +1,4 @@
+#pragma once
 /**
  * File Name:   helper.hpp
  * Author:      Tianyi Gu, Zhuo Xu
@@ -5,8 +6,6 @@
  * Date:        April-8-2018 
  * Descroption: Helpe functions 
  */
-
-#pragma once
 
 #include <cmath>
 #include <vector>

@@ -6,8 +6,6 @@
  * Descroption: A mapping node that update an occupancy map
  */
 
-#pragma once
-
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include <geometry_msgs/Twist.h>
@@ -19,6 +17,7 @@
 #include <nav_msgs/MapMetaData.h>
 #include <tf/transform_datatypes.h>
 #include <tf/transform_listener.h>
+#include <tf/tf.h>
 #include <sensor_msgs/LaserScan.h>
 #include <Eigen/Dense>
 #include <iostream>
@@ -116,14 +115,14 @@ class MakeMap
       MakeMap();
 
   private:
-      void odom_callback(const nav_msgs::Odometry::ConstPtr& msg);
+      void updateOdom();
       void laserScan_callback(const sensor_msgs::LaserScan::ConstPtr& msg);
       void laserInitialize(const sensor_msgs::LaserScan::ConstPtr& msg);
       void initializeMap();
       void updateMap();
       void updateMapByOneScan(double range, int scanIndex);
-      geometry_msgs::Point scan2map(geometry_msgs::Point p);
-      std::pair<int, int> point2grid(geometry_msgs::Point p);
+      geometry_msgs::Point scan2world(geometry_msgs::Point p);
+      std::pair<int, int> point2grid(double x, double y);
       void updateCell(const int x, const int y);
       void updateObstacleCell(const int mapIndex);
       void updateFreeCell(const int mapIndex);
@@ -139,42 +138,43 @@ class MakeMap
       // tf Transform Listener
       tf::TransformListener listener;
 
-      geometry_msgs::Pose curPose;
-      geometry_msgs::Pose lockedPose;
-      double roll, pitch, yaw;
-	  double lockedYaw;
+      double roll, pitch, yaw,curX,curY;
       std::vector<double> curRanges;
-      std::vector<double> lockedRanges;
+	  tf::StampedTransform odomTransform;
       bool laserInitialed = false;
       double angle_min;
       double angle_increment;
-      int range_size;
+      int range_size = 0;
 
       nav_msgs::OccupancyGrid current_map;
 	  std::vector<double> prior;
 	  double originOrentation;
+	  double originX;
+	  double originY;
       nav_msgs::MapMetaData meta;
       sensor_msgs::LaserScan scan;
 
 };
 
 MakeMap::MakeMap(){
-    initializeMap();
+
+    ros::Rate loop_rate(LOOP_RATE);
+    loop_rate.sleep();
 
     pub_map =
             nodeHandle.advertise<nav_msgs::OccupancyGrid>("/frontier_map", 100);
 
     sub_laserScan = nodeHandle.subscribe(
             "/scan", 100, &MakeMap::laserScan_callback, this);
-    odom_sub = nodeHandle.subscribe<nav_msgs::Odometry>(
-            "odom", 1, &MakeMap::odom_callback, this);
 
-    listener.waitForTransform(
-            "/map", "/camera_depth_frame", ros::Time(0), ros::Duration(1.0));
+	updateOdom();
+	ros::spinOnce();
+    initializeMap();
+    loop_rate.sleep();
 
-    ros::Rate loop_rate(LOOP_RATE);
     while (ros::ok()){
         updateMap();
+		ros::spinOnce();
         loop_rate.sleep();
     }
 }
@@ -191,19 +191,23 @@ void MakeMap::initializeMap(){
     current_map.info.height = GRID_SIZEX; 
     current_map.info.width = GRID_SIZEY;
     current_map.info.resolution = GRID_RESOLUTION;
-    current_map.info.origin = curPose;
-
-    originOrentation = yaw;
+    originX = -GRID_SIZEX / 2 * GRID_RESOLUTION;
+    originY = -GRID_SIZEY / 2 * GRID_RESOLUTION;
+    current_map.info.origin.position.x = originX;
+    current_map.info.origin.position.y = originY;
 }
 
-void MakeMap::odom_callback(const nav_msgs::Odometry::ConstPtr& msg){
-    tf::Quaternion q(msg->pose.pose.orientation.x,
-                     msg->pose.pose.orientation.y,
-                     msg->pose.pose.orientation.z,
-                     msg->pose.pose.orientation.w);
-    tf::Matrix3x3 m(q);
+void MakeMap::updateOdom(){
+
+    listener.waitForTransform(
+            "/map", "/odom", ros::Time(0), ros::Duration(1.0));
+    listener.lookupTransform("/map", "/odom", ros::Time(0), odomTransform);
+	
+    tf::Matrix3x3 m(odomTransform.getRotation());
     m.getRPY(roll, pitch, yaw);
-    curPose = msg->pose.pose;
+
+	curX=odomTransform.getOrigin().getX();
+	curY=odomTransform.getOrigin().getY();
 }
 
 void MakeMap::laserScan_callback(
@@ -213,7 +217,9 @@ void MakeMap::laserScan_callback(
         return;
     }
     for (int i = 0; i < range_size; i++){
-        curRanges[i] = msg->ranges[i];
+        curRanges[i] = msg->ranges[i] > LASER_MAX_RANG ?
+                std::numeric_limits<double>::quiet_NaN() :
+                msg->ranges[i];
     }
 }
 
@@ -229,12 +235,9 @@ void MakeMap::laserInitialize(
 }
 
 void MakeMap::updateMap() {
-    lockedPose = curPose;
-    lockedYaw = yaw;
-    lockedRanges = curRanges;
     for (int i = 0; i < range_size; ++i) {
-        if (!std::isnan(lockedRanges[i])) {
-            updateMapByOneScan(lockedRanges[i], i);
+        if (!std::isnan(curRanges[i])) {
+            updateMapByOneScan(curRanges[i], i);
         }
     }
 	pub_map.publish(current_map);
@@ -244,23 +247,23 @@ void MakeMap::updateMapByOneScan(double range,int scanIndex){
     geometry_msgs::Point scanPoint;
     scanPoint.x = range * cos(angle_min + scanIndex * angle_increment);
     scanPoint.y = range * sin(angle_min + scanIndex * angle_increment);
-    geometry_msgs::Point mapPoint = scan2map(scanPoint);
-	std::pair<int,int> gridXY = point2grid(mapPoint);
+    geometry_msgs::Point worldPoint = scan2world(scanPoint);
+	std::pair<int,int> gridXY = point2grid(worldPoint.x, worldPoint.y);
 	updateCell(gridXY.first,gridXY.second);
 }
 
-geometry_msgs::Point MakeMap::scan2map(geometry_msgs::Point p){
-    Eigen::Matrix3d R = getRotationMatrix(lockedYaw);
+geometry_msgs::Point MakeMap::scan2world(geometry_msgs::Point p){
+    Eigen::Matrix3d R = getRotationMatrix(yaw);
     Eigen::Matrix3d T =
-            getTranslationMatrix(lockedPose.position.x, lockedPose.position.y);
+            getTranslationMatrix(curX, curY);
     return pointTranform(p, R, T);
 }
 
-std::pair<int,int> MakeMap::point2grid(geometry_msgs::Point p){
+std::pair<int,int> MakeMap::point2grid(double x, double y){
     geometry_msgs::Point originPosition = current_map.info.origin.position;
 
-    int gridX = int(round((p.x-originPosition.x)/GRID_RESOLUTION));
-    int gridY = int(round((p.y-originPosition.y)/GRID_RESOLUTION));
+    int gridX = int(round((x-originPosition.x)/GRID_RESOLUTION));
+    int gridY = int(round((y-originPosition.y)/GRID_RESOLUTION));
     assert(gridX < GRID_SIZEX);
     assert(gridY < GRID_SIZEY);
     return std::pair<int, int> (gridX,gridY);
@@ -269,34 +272,44 @@ std::pair<int,int> MakeMap::point2grid(geometry_msgs::Point p){
 void MakeMap::updateCell(const int x, const int y){
     // update obstacle cell
     int obstacleCellIndex = gridXY2mapIndex(x, y);
+    assert(obstacleCellIndex >= 0);
     updateObstacleCell(obstacleCellIndex);
 
     // update line of sight
-    std::pair<int, int> robotXY = point2grid(lockedPose.position);
+    std::pair<int, int> robotXY = point2grid(curX,curY);
     std::vector<std::pair<int, int>> lineOfSight =
             getLine(x, y, robotXY.first, robotXY.second);
-
-    for (auto cell : lineOfSight) {
-        int freeCellIndex = gridXY2mapIndex(cell.first, cell.second);
+    for (unsigned int i = 1; i < lineOfSight.size() - 1; ++i) {
+        int freeCellIndex =
+                gridXY2mapIndex(lineOfSight[i].first, lineOfSight[i].second);
+        assert(freeCellIndex >= 0);
         updateFreeCell(freeCellIndex);
-	}
+    }
 }
 
 void MakeMap::updateObstacleCell(const int mapIndex){
+    if (mapIndex < 0 || mapIndex > GRID_SIZEX * GRID_SIZEY) {
+        std::cout << "out of map index";
+        return;
+    }
     double p_z = SENSOR_MODEL_TRUE_POSITIVE * prior[mapIndex] +
             SENSOR_MODEL_FALSE_POSITIVE * (1 - prior[mapIndex]);
     prior[mapIndex] = SENSOR_MODEL_TRUE_POSITIVE * prior[mapIndex] / p_z;
-    current_map.data[mapIndex] = prior[mapIndex] > OCCUPIED_PROB ? 1 : 0;
+    current_map.data[mapIndex] = prior[mapIndex] > 0.5 ? 100 : 0;
 }
 
 void MakeMap::updateFreeCell(const int mapIndex){
+    if (mapIndex < 0 || mapIndex > GRID_SIZEX * GRID_SIZEY) {
+        std::cout << "out of map index";
+        return;
+    }
     if (prior[mapIndex] == 0.5 || prior[mapIndex] == 0.3) {
         prior[mapIndex] = 0.3;
 	}	
 	else{
         prior[mapIndex] = 0.3;// update Bayes rule if this doesn't work
 	}
-    current_map.data[mapIndex] = prior[mapIndex] > OCCUPIED_PROB ? 1 : 0;
+    current_map.data[mapIndex] = prior[mapIndex] > 0.5 ? 100 : 0;
 }
 
 int MakeMap::gridXY2mapIndex(const int x, const int y){
