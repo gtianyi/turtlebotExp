@@ -9,13 +9,9 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include <geometry_msgs/Twist.h>
-#include <geometry_msgs/Pose2D.h>
 #include <geometry_msgs/Quaternion.h>
 #include <ros/console.h>
-#include "nav_msgs/Odometry.h"
 #include <nav_msgs/OccupancyGrid.h>
-#include <nav_msgs/MapMetaData.h>
-#include <tf/transform_datatypes.h>
 #include <tf/transform_listener.h>
 #include <tf/tf.h>
 #include <sensor_msgs/LaserScan.h>
@@ -131,9 +127,7 @@ class MakeMap
       ros::NodeHandle nodeHandle;
 
       ros::Publisher pub_map;
-      ros::Subscriber odom_sub;
       ros::Subscriber sub_laserScan;
-      ros::Subscriber sub_base_pos;
 
       // tf Transform Listener
       tf::TransformListener listener;
@@ -148,10 +142,6 @@ class MakeMap
 
       nav_msgs::OccupancyGrid current_map;
 	  std::vector<double> prior;
-	  double originOrentation;
-	  double originX;
-	  double originY;
-      nav_msgs::MapMetaData meta;
       sensor_msgs::LaserScan scan;
 
 };
@@ -173,6 +163,7 @@ MakeMap::MakeMap(){
     loop_rate.sleep();
 
     while (ros::ok()){
+        updateOdom();
         updateMap();
 		ros::spinOnce();
         loop_rate.sleep();
@@ -188,21 +179,21 @@ void MakeMap::initializeMap(){
         prior.push_back(0.5);
     }
 
+    current_map.header.frame_id = "map"; 
     current_map.info.height = GRID_SIZEX; 
     current_map.info.width = GRID_SIZEY;
     current_map.info.resolution = GRID_RESOLUTION;
-    originX = -GRID_SIZEX / 2 * GRID_RESOLUTION;
-    originY = -GRID_SIZEY / 2 * GRID_RESOLUTION;
-    current_map.info.origin.position.x = originX;
-    current_map.info.origin.position.y = originY;
+    current_map.info.origin.position.x = -GRID_SIZEX / 2 * GRID_RESOLUTION;
+    current_map.info.origin.position.y = -GRID_SIZEY / 2 * GRID_RESOLUTION;
+    current_map.info.origin.orientation.w = 1;
 }
 
 void MakeMap::updateOdom(){
-
     listener.waitForTransform(
-            "/map", "/odom", ros::Time(0), ros::Duration(1.0));
-    listener.lookupTransform("/map", "/odom", ros::Time(0), odomTransform);
-	
+            "/map", "/camera_depth_frame", ros::Time(0), ros::Duration(1.0));
+    listener.lookupTransform(
+            "/map", "/camera_depth_frame", ros::Time(0), odomTransform);
+
     tf::Matrix3x3 m(odomTransform.getRotation());
     m.getRPY(roll, pitch, yaw);
 
@@ -253,6 +244,7 @@ void MakeMap::updateMapByOneScan(double range,int scanIndex){
 }
 
 geometry_msgs::Point MakeMap::scan2world(geometry_msgs::Point p){
+    std::cout << yaw << "\n";
     Eigen::Matrix3d R = getRotationMatrix(yaw);
     Eigen::Matrix3d T =
             getTranslationMatrix(curX, curY);
