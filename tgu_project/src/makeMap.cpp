@@ -9,6 +9,7 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include <geometry_msgs/Twist.h>
+#include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Quaternion.h>
 #include <ros/console.h>
 #include <nav_msgs/OccupancyGrid.h>
@@ -111,6 +112,7 @@ class MakeMap
       MakeMap();
 
   private:
+      void odom_callback(const nav_msgs::Odometry::ConstPtr& msg);
       void updateOdom();
       void laserScan_callback(const sensor_msgs::LaserScan::ConstPtr& msg);
       void laserInitialize(const sensor_msgs::LaserScan::ConstPtr& msg);
@@ -126,22 +128,23 @@ class MakeMap
 
       ros::NodeHandle nodeHandle;
 
+      ros::Subscriber odom_sub;
       ros::Publisher pub_map;
       ros::Subscriber sub_laserScan;
 
       // tf Transform Listener
       tf::TransformListener listener;
 
-      double roll, pitch, yaw,curX,curY;
+      double roll, pitch, yaw, curX, curY;
       std::vector<double> curRanges;
-	  tf::StampedTransform odomTransform;
+      tf::StampedTransform odomTransform;
       bool laserInitialed = false;
       double angle_min;
       double angle_increment;
       int range_size = 0;
 
       nav_msgs::OccupancyGrid current_map;
-	  std::vector<double> prior;
+      std::vector<double> prior;
       sensor_msgs::LaserScan scan;
 
 };
@@ -153,23 +156,33 @@ MakeMap::MakeMap(){
 
     pub_map =
             nodeHandle.advertise<nav_msgs::OccupancyGrid>("/frontier_map", 100);
-
+    odom_sub = nodeHandle.subscribe<nav_msgs::Odometry>(
+            "odom", 1, &MakeMap::odom_callback, this);
     sub_laserScan = nodeHandle.subscribe(
             "/scan", 100, &MakeMap::laserScan_callback, this);
 
-	updateOdom();
+	//updateOdom();
 	ros::spinOnce();
     initializeMap();
     loop_rate.sleep();
 
     while (ros::ok()){
-        updateOdom();
+        //updateOdom();
         updateMap();
 		ros::spinOnce();
         loop_rate.sleep();
     }
 }
-
+void MakeMap::odom_callback(const nav_msgs::Odometry::ConstPtr& msg){
+    tf::Quaternion q(msg->pose.pose.orientation.x,
+                     msg->pose.pose.orientation.y,
+                     msg->pose.pose.orientation.z,
+                     msg->pose.pose.orientation.w);
+    tf::Matrix3x3 m(q);
+    m.getRPY(roll, pitch, yaw);
+    curX = msg->pose.pose.position.x;
+    curY = msg->pose.pose.position.y;
+}
 void MakeMap::initializeMap(){
     // Initialize the map as unknown (-1) 
 	// Initiallize prior as 0.5
@@ -244,7 +257,6 @@ void MakeMap::updateMapByOneScan(double range,int scanIndex){
 }
 
 geometry_msgs::Point MakeMap::scan2world(geometry_msgs::Point p){
-    std::cout << yaw << "\n";
     Eigen::Matrix3d R = getRotationMatrix(yaw);
     Eigen::Matrix3d T =
             getTranslationMatrix(curX, curY);

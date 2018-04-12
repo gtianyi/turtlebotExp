@@ -24,8 +24,8 @@
     <param name="publish_frequency" type="double" value="30.0" />
   </node>
 
-  <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
-  </node>
+ <!-- <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
+  </node>-->
   
   <!-- Fake laser -->
   <node pkg="nodelet" type="nodelet" name="laserscan_nodelet_manager" args="manager"/>
