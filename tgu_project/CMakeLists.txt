@@ -154,6 +154,10 @@ include_directories(
 add_executable(makeMap src/makeMap.cpp)
 target_link_libraries(makeMap ${catkin_LIBRARIES})
 
+add_executable(frontierExploration src/frontierExploration.cpp)
+target_link_libraries(frontierExploration ${catkin_LIBRARIES})
+
+
 #############
 ## Install ##
 #############

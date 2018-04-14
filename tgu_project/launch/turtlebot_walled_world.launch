@@ -24,8 +24,11 @@
     <param name="publish_frequency" type="double" value="30.0" />
   </node>
 
- <!-- <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
-  </node>-->
+  <!-- Gmapping -->
+  <include file="$(find tgu_project)/launch/includes/gmapping.launch.xml"/>
+
+  <!-- Move base -->
+  <include file="$(find tgu_project)/launch/includes/move_base.launch.xml"/>
   
   <!-- Fake laser -->
   <node pkg="nodelet" type="nodelet" name="laserscan_nodelet_manager" args="manager"/>

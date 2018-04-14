@@ -50,34 +50,13 @@
 #define GRID_RESOLUTION 0.05 //in meters/cell(5cm)
 
 #define LASER_MIN_RANG 0.5
-#define LASER_MAX_RANG 6
+#define LASER_MAX_RANG 8
+#define SCAN_DIFF_THRESHOLD 0.05
 
 #define SENSOR_MODEL_TRUE_POSITIVE 0.9
 #define SENSOR_MODEL_FALSE_POSITIVE 0.3
 
 #define OCCUPIED_PROB 0.5
-
-double rad2degree(double rad){
-    return rad / PI * 180;
-}
-
-double degree2rad(double degree){
-    return degree / 180 * PI;
-}
-
-double normalize_degree(double degree){
-    return fmod(degree + 360, 360);
-}
-
-double normalize_rad(double rad){
-    double degree = rad2degree(rad);
-    degree = normalize_degree(degree);
-    return degree2rad(degree);
-}
-
-double distanceBetween(geometry_msgs::Point p1, geometry_msgs::Point p2){
-    return sqrt(pow(p1.x - p2.x, 2.0) + pow(p1.y - p2.y, 2.0));
-}
 
 Eigen::Matrix3d getRotationMatrix(double theta){
     Eigen::Matrix3d retMatrix;
@@ -137,6 +116,7 @@ class MakeMap
 
       double roll, pitch, yaw, curX, curY;
       std::vector<double> curRanges;
+      std::vector<double> prevRanges;
       tf::StampedTransform odomTransform;
       bool laserInitialed = false;
       double angle_min;
@@ -156,18 +136,18 @@ MakeMap::MakeMap(){
 
     pub_map =
             nodeHandle.advertise<nav_msgs::OccupancyGrid>("/frontier_map", 100);
-    odom_sub = nodeHandle.subscribe<nav_msgs::Odometry>(
-            "odom", 1, &MakeMap::odom_callback, this);
+    //odom_sub = nodeHandle.subscribe<nav_msgs::Odometry>(
+    //        "odom", 1, &MakeMap::odom_callback, this);
     sub_laserScan = nodeHandle.subscribe(
             "/scan", 100, &MakeMap::laserScan_callback, this);
 
-	//updateOdom();
+	updateOdom();
 	ros::spinOnce();
     initializeMap();
     loop_rate.sleep();
 
     while (ros::ok()){
-        //updateOdom();
+        updateOdom();
         updateMap();
 		ros::spinOnce();
         loop_rate.sleep();
@@ -221,6 +201,7 @@ void MakeMap::laserScan_callback(
         return;
     }
     for (int i = 0; i < range_size; i++){
+        prevRanges[i] = curRanges[i];
         curRanges[i] = msg->ranges[i] > LASER_MAX_RANG ?
                 std::numeric_limits<double>::quiet_NaN() :
                 msg->ranges[i];
@@ -231,6 +212,7 @@ void MakeMap::laserInitialize(
     const sensor_msgs::LaserScan::ConstPtr& msg){
     for (const auto &p : msg -> ranges){
         curRanges.push_back(p);
+		prevRanges.push_back(p);
     }
     angle_min = msg->angle_min;
     angle_increment = msg->angle_increment;
@@ -241,6 +223,10 @@ void MakeMap::laserInitialize(
 void MakeMap::updateMap() {
     for (int i = 0; i < range_size; ++i) {
         if (!std::isnan(curRanges[i])) {
+            if (!std::isnan(prevRanges[i]) &&
+                    fabs(curRanges[i] - prevRanges[i]) > SCAN_DIFF_THRESHOLD) {
+                continue;
+            }
             updateMapByOneScan(curRanges[i], i);
         }
     }
@@ -317,7 +303,7 @@ void MakeMap::updateFreeCell(const int mapIndex){
 }
 
 int MakeMap::gridXY2mapIndex(const int x, const int y){
-    return y * GRID_SIZEY + x;
+    return y * GRID_SIZEX + x;
 }
 
 int main(int argc, char **argv){
