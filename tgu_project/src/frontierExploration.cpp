@@ -51,8 +51,8 @@
 #define LOOP_RATE 50
 
 // parameter for mapping
-#define GRID_SIZEX 500
-#define GRID_SIZEY 500
+#define GRID_SIZEX 480
+#define GRID_SIZEY 480
 #define GRID_RESOLUTION 0.05 //in meters/cell(5cm)
 
 #define LASER_MIN_RANG 0.5
@@ -195,7 +195,7 @@ FrontierExploration::FrontierExploration(){
 
     // subscribers
     sub_map = nodeHandle.subscribe(
-            "/frontier_map", 100, &FrontierExploration::map_callback, this);
+            "map", 100, &FrontierExploration::map_callback, this);
     sub_move_base_status = nodeHandle.subscribe("/move_base/status",
             100,
             &FrontierExploration::move_base_status_callback,
