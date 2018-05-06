@@ -49,6 +49,9 @@
 #define POINT_DISTANT_THRESHOLD 0.05
 
 #define LOOP_RATE 50
+#define DURATION_SHORT 1
+#define DURATION_MIDDLE 3
+#define DURATION_LONG 15
 
 // parameter for mapping
 #define GRID_SIZEX 480
@@ -65,6 +68,9 @@
 
 #define UTIL_DIS_WEIGHT 0.7
 #define UTIL_LEN_WEIGHT 0.3
+
+// parameter for frontier exploration
+#define FRONTIER_FILTER_MIN 10
 
 double rad2degree(double rad){
     return rad / PI * 180;
@@ -141,7 +147,7 @@ class FrontierExploration
 	  void connectedComponentLabeling();
 	  bool checkFrontier(const int x, const int y);
 	  double getUtil(geometry_msgs::Point centroid, int frontierLength);
-      void rotate(double angle);
+      void rotate360();
       void fullStop();
       void vel_from_wheels(double vl, double vr, double sec);
       void visualizeCentroid(const geometry_msgs::Point& centroid,
@@ -257,8 +263,11 @@ void FrontierExploration::run(){
     loop_rate.sleep();
 
     while (ros::ok()) {
-        rotate(2 * PI);
+        rotate360();
+        ros::spinOnce();
+        ros::Duration(DURATION_MIDDLE).sleep();
 
+        ros::spinOnce();
         updateFrontiers();
         updateGoalPose();
 
@@ -266,12 +275,17 @@ void FrontierExploration::run(){
             break;
         }
 
-        pub_marker_centorid.publish(markerArray);
         pub_marker_frontier.publish(lineMarker);
+        ros::spinOnce();
+		ros::Duration(DURATION_SHORT).sleep();
+
+        pub_marker_centorid.publish(markerArray);
+		ros::spinOnce();
+		ros::Duration(DURATION_SHORT).sleep();
 
         pub_goal.publish(goalPose);
-        loop_rate.sleep();
 		ros::spinOnce();
+		ros::Duration(DURATION_LONG).sleep();
 		
         while (goalStatus.status == actionlib_msgs::GoalStatus::ACTIVE) {
             ROS_INFO("moving to centroid....");
@@ -314,7 +328,7 @@ bool FrontierExploration::checkFrontier(const int x, const int y){
 }
 
 void FrontierExploration::connectedComponentLabeling() {
-    frontiers.clear();
+    std::vector<std::vector<GridCell>> tempfrontiers;
 
     for (int i = 0; i < GRID_SIZEY; i++) {
         for (int j = 0; j < GRID_SIZEX; j++) {
@@ -323,7 +337,7 @@ void FrontierExploration::connectedComponentLabeling() {
             } else if (i - 1 >= 0 && j - 1 >= 0 &&
                     map2D[i - 1][j - 1].frontierID != -1) {
                 map2D[i][j].frontierID = map2D[i - 1][j - 1].frontierID;
-				frontiers[map2D[i][j].frontierID].push_back(map2D[i][j]);
+				tempfrontiers[map2D[i][j].frontierID].push_back(map2D[i][j]);
             } else if ((i - 1 >= 0 && j - 1 >= 0 &&
                                map2D[i - 1][j].frontierID == -1 &&
                                map2D[i][j - 1].frontierID == -1) ||
@@ -331,10 +345,10 @@ void FrontierExploration::connectedComponentLabeling() {
                                map2D[i][j - 1].frontierID == -1) ||
                     (i - 1 >= 0 && j - 1 < 0 &&
                                map2D[i - 1][j].frontierID == -1)) {
-                map2D[i][j].frontierID = frontiers.size();
+                map2D[i][j].frontierID = tempfrontiers.size();
                 std::vector<GridCell> newfrontier;
                 newfrontier.push_back(map2D[i][j]);
-                frontiers.push_back(newfrontier);
+                tempfrontiers.push_back(newfrontier);
             } else if (i - 1 >= 0 && map2D[i - 1][j].frontierID != -1) {
                 map2D[i][j].frontierID = map2D[i - 1][j].frontierID;
             } else if (j - 1 >= 0 && map2D[i][j - 1].frontierID != -1) {
@@ -342,12 +356,20 @@ void FrontierExploration::connectedComponentLabeling() {
             }
         }
     }
+
+    frontiers.clear();
+    for (auto f : tempfrontiers) {
+        if (f.size() > FRONTIER_FILTER_MIN) {
+            frontiers.push_back(f);
+        }
+    }
 }
 
 void FrontierExploration::updateGoalPose(){
-	double bestUtil=0;	
-	int id=0;
+    double bestUtil = 0;
+    int id = 0;
 
+    geometry_msgs::Point bestCentroid;
     for (const auto& frontier : frontiers) {
         int x_c = 0;
         int y_c = 0;
@@ -363,12 +385,15 @@ void FrontierExploration::updateGoalPose(){
         if (util > bestUtil) {
             bestUtil = util;
             goalPose.pose.position = centroid;
+			bestCentroid=centroid;
         }
 
-		visualizeCentroid(centroid,id);
-		visualizeFrontier(frontier,id);
-		id++;
+        visualizeCentroid(centroid, id);
+        visualizeFrontier(frontier, id);
+        id++;
     }
+
+    visualizeCentroid(bestCentroid, id, 0, false);
 
     if (id == 0) {
         terminate = true;
@@ -384,8 +409,8 @@ double FrontierExploration::getUtil(geometry_msgs::Point centroid, const int fro
 geometry_msgs::Point FrontierExploration::grid2point(const int x, const int y) {
     geometry_msgs::Point retPosition;
 
-    retPosition.x = (float)x * GRID_RESOLUTION + mapOrigin.x;
-    retPosition.y = (float)y * GRID_RESOLUTION + mapOrigin.y;
+    retPosition.y = (float)x * GRID_RESOLUTION + mapOrigin.x;
+    retPosition.x = (float)y * GRID_RESOLUTION + mapOrigin.y;
 
     return retPosition;
 }
@@ -498,47 +523,11 @@ void FrontierExploration::removeAllMarkers(){
     lineMarker = visualization_msgs::MarkerArray();
 }
 
-void FrontierExploration::rotate(double angle){
-    if(fabs(angle) < TURN_THRESHOLD) return;
+void FrontierExploration::rotate360(){
     double vl, vr;
-    if (angle < 0){
-        vl = 0.05;
-        vr = -0.05;
-    }
-    else{
-        vl = -0.05;
-        vr = 0.05;
-    }
-    double curAngle = 0;
-    while(fabs(curAngle) < fabs(angle) && ros::ok()){
-        double start_orentation = yaw;
-        vel_from_wheels(vl, vr, 0.05);
-        double deltaAngle;
-        if(angle > 0){
-            if(yaw < 0 && start_orentation > 0){
-                deltaAngle = 2 * PI + (yaw - start_orentation);
-            }
-            else{
-                deltaAngle = yaw - start_orentation;
-            }
-        }
-        else{
-            if(start_orentation < 0 && yaw > 0){
-                deltaAngle = 2 * PI + (start_orentation - yaw);
-            }
-            else{
-                deltaAngle = start_orentation - yaw;
-            }
-        }
-        if(fabs(deltaAngle) > TURN_THRESHOLD){
-            curAngle += deltaAngle;
-        }
-		ros::spinOnce();
-		//ROS_INFO("Rotating...");
-		ROS_INFO_STREAM("yaw "<<yaw);
-		ROS_INFO_STREAM("curAngle "<<curAngle);
-    }
-    fullStop();
+    vl = -0.05;
+    vr = 0.05;
+    vel_from_wheels(vl, vr, 14);
 }
 
 void FrontierExploration::vel_from_wheels(double vl, double vr, double sec){
@@ -556,6 +545,7 @@ void FrontierExploration::vel_from_wheels(double vl, double vr, double sec){
         this->pub_vel.publish(curVel);
 		ros::spinOnce();
         loop_rate.sleep();
+		ROS_INFO_STREAM("rotate 360...");
     }
 }
 
