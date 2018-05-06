@@ -70,7 +70,7 @@
 #define UTIL_LEN_WEIGHT 0.3
 
 // parameter for frontier exploration
-#define FRONTIER_FILTER_MIN 5
+#define FRONTIER_FILTER_MIN 20
 
 double rad2degree(double rad){
     return rad / PI * 180;
@@ -286,7 +286,8 @@ void FrontierExploration::run(){
         pub_goal.publish(goalPose);
 		ros::spinOnce();
 		ros::Duration(DURATION_LONG).sleep();
-		
+		ros::spinOnce();
+
         while (goalStatus.status == actionlib_msgs::GoalStatus::ACTIVE) {
             ROS_INFO("moving to centroid....");
 			ros::spinOnce();
@@ -402,7 +403,7 @@ void FrontierExploration::updateGoalPose(){
 
 double FrontierExploration::getUtil(geometry_msgs::Point centroid, const int frontierLength){
     double dis = distanceBetween(centroid, robotPosition);
-    double util = dis / frontierLength;
+    double util = frontierLength/dis;
     return util;
 }
 
@@ -527,7 +528,7 @@ void FrontierExploration::rotate360(){
     double vl, vr;
     vl = -0.05;
     vr = 0.05;
-    vel_from_wheels(vl, vr, 30);
+    vel_from_wheels(vl, vr, 14);
 }
 
 void FrontierExploration::vel_from_wheels(double vl, double vr, double sec){
