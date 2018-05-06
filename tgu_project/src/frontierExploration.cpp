@@ -70,7 +70,7 @@
 #define UTIL_LEN_WEIGHT 0.3
 
 // parameter for frontier exploration
-#define FRONTIER_FILTER_MIN 10
+#define FRONTIER_FILTER_MIN 5
 
 double rad2degree(double rad){
     return rad / PI * 180;
