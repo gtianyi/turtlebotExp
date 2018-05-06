@@ -527,7 +527,7 @@ void FrontierExploration::rotate360(){
     double vl, vr;
     vl = -0.05;
     vr = 0.05;
-    vel_from_wheels(vl, vr, 14);
+    vel_from_wheels(vl, vr, 30);
 }
 
 void FrontierExploration::vel_from_wheels(double vl, double vr, double sec){
