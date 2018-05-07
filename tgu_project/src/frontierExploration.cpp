@@ -402,8 +402,9 @@ void FrontierExploration::updateGoalPose(){
 }
 
 double FrontierExploration::getUtil(geometry_msgs::Point centroid, const int frontierLength){
-    double dis = distanceBetween(centroid, robotPosition);
-    double util = frontierLength/dis;
+	double dis = distanceBetween(centroid, robotPosition);
+    //double util = frontierLength/dis;
+    double util = frontierLength;
     return util;
 }
 
