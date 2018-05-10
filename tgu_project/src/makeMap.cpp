@@ -136,23 +136,24 @@ MakeMap::MakeMap(){
 
     pub_map =
             nodeHandle.advertise<nav_msgs::OccupancyGrid>("/frontier_map", 100);
-    //odom_sub = nodeHandle.subscribe<nav_msgs::Odometry>(
-    //        "odom", 1, &MakeMap::odom_callback, this);
+	odom_sub = nodeHandle.subscribe<nav_msgs::Odometry>(
+			"odom", 1, &MakeMap::odom_callback, this);
     sub_laserScan = nodeHandle.subscribe(
             "/scan", 100, &MakeMap::laserScan_callback, this);
 
-	updateOdom();
+	//updateOdom();
 	ros::spinOnce();
     initializeMap();
     loop_rate.sleep();
 
     while (ros::ok()){
-        updateOdom();
+        //updateOdom();
         updateMap();
 		ros::spinOnce();
         loop_rate.sleep();
     }
 }
+
 void MakeMap::odom_callback(const nav_msgs::Odometry::ConstPtr& msg){
     tf::Quaternion q(msg->pose.pose.orientation.x,
                      msg->pose.pose.orientation.y,
@@ -163,6 +164,7 @@ void MakeMap::odom_callback(const nav_msgs::Odometry::ConstPtr& msg){
     curX = msg->pose.pose.position.x;
     curY = msg->pose.pose.position.y;
 }
+
 void MakeMap::initializeMap(){
     // Initialize the map as unknown (-1) 
 	// Initiallize prior as 0.5
